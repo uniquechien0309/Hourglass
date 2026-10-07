@@ -1,0 +1,1155 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>像素班級經營工具 - 電子沙漏與座位表</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-dark: #141824;
+            --bg-panel: #1f2438;
+            --bg-card: #2a314b;
+            --pixel-gold: #ffcd75;
+            --pixel-orange: #ef7d57;
+            --pixel-red: #e43b44;
+            --pixel-green: #38b764;
+            --pixel-cyan: #41a6f6;
+            --pixel-border: #f4f4f4;
+        }
+
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            background-image: 
+                radial-gradient(#293047 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(20, 24, 36, 0.9), rgba(13, 16, 25, 0.98));
+            background-size: 24px 24px, 100% 100%;
+            font-family: 'DotGothic16', monospace, sans-serif;
+            color: #f4f4f4;
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+        }
+
+        .font-pixel-num {
+            font-family: 'Press Start 2P', 'DotGothic16', monospace;
+        }
+
+        /* 復古像素外框效果 */
+        .pixel-box {
+            background-color: var(--bg-panel);
+            border: 4px solid #f4f4f4;
+            box-shadow: 
+                0 0 0 4px #0b0d14,
+                8px 8px 0 0 rgba(0, 0, 0, 0.55);
+            image-rendering: pixelated;
+        }
+
+        .pixel-box-amber {
+            background-color: #251d29;
+            border: 4px solid var(--pixel-gold);
+            box-shadow: 
+                0 0 0 4px #0b0d14,
+                8px 8px 0 0 rgba(0, 0, 0, 0.6);
+        }
+
+        /* 像素按鈕樣式 */
+        .pixel-btn {
+            position: relative;
+            border: 3px solid #f4f4f4;
+            box-shadow: 0 4px 0 #0b0d14;
+            transition: transform 0.06s steps(2), box-shadow 0.06s steps(2), background-color 0.1s;
+            cursor: pointer;
+            image-rendering: pixelated;
+        }
+
+        .pixel-btn:hover {
+            filter: brightness(1.12);
+        }
+
+        .pixel-btn:active {
+            transform: translateY(4px);
+            box-shadow: 0 0px 0 #0b0d14;
+        }
+
+        /* 像素輸入框 */
+        .pixel-input {
+            background-color: #11141f;
+            border: 3px solid #73eff7;
+            color: #ffcd75;
+            text-align: center;
+            outline: none;
+            box-shadow: inset 3px 3px 0 rgba(0,0,0,0.6);
+            -moz-appearance: textfield;
+            appearance: textfield;
+        }
+
+        /* 移除瀏覽器預設數字上下箭頭，避免壓縮兩位數顯示空間 */
+        .pixel-input::-webkit-outer-spin-button,
+        .pixel-input::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+
+        .pixel-input:focus {
+            border-color: #ffcd75;
+            background-color: #191e2e;
+        }
+
+        /* 畫布像素化放大 */
+        canvas.pixel-canvas {
+            image-rendering: -moz-crisp-edges;
+            image-rendering: -webkit-crisp-edges;
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+        }
+
+        /* 座位格子與三角警示動畫 */
+        .seat-cell {
+            position: relative;
+            background-color: #2b334e;
+            border: 3px solid #566c86;
+            box-shadow: inset -2px -2px 0 #1a1c2c, inset 2px 2px 0 #41536b, 0 3px 0 #0f121c;
+            transition: transform 0.05s;
+            cursor: pointer;
+        }
+
+        .seat-cell:hover {
+            border-color: #ffcd75;
+            background-color: #364163;
+        }
+
+        .seat-cell:active {
+            transform: translateY(2px);
+        }
+
+        .seat-cell.warning-active {
+            background-color: #4b1d24;
+            border-color: #ff4d4d;
+            box-shadow: inset -2px -2px 0 #2b0f13, inset 2px 2px 0 #802430, 0 0 12px rgba(255, 77, 77, 0.45);
+            animation: warningPulse 0.9s steps(2, start) infinite;
+        }
+
+        @keyframes warningPulse {
+            0%, 100% {
+                border-color: #ff4d4d;
+                background-color: #4b1d24;
+            }
+            50% {
+                border-color: #ffcd75;
+                background-color: #681823;
+            }
+        }
+
+        @keyframes triangleBounce {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-2px); }
+        }
+
+        .warning-icon-anim {
+            animation: triangleBounce 0.6s steps(2, start) infinite;
+        }
+
+        /* 時間到閃爍效果 */
+        .alarm-flash {
+            animation: screenAlarm 0.5s steps(2, start) infinite;
+        }
+
+        @keyframes screenAlarm {
+            0%, 100% { border-color: #f4f4f4; }
+            50% { border-color: #e43b44; box-shadow: 0 0 28px rgba(228, 59, 68, 0.75); }
+        }
+
+        /* 隱藏捲軸但保留滾動能力 */
+        .custom-scroll::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        .custom-scroll::-webkit-scrollbar-track {
+            background: #141824;
+        }
+        .custom-scroll::-webkit-scrollbar-thumb {
+            background: #566c86;
+            border: 2px solid #141824;
+        }
+    </style>
+</head>
+<body class="relative flex items-center justify-center select-none">
+
+    <!-- 頂部狀態與控制列 -->
+    <header class="fixed top-4 left-4 right-4 z-40 flex items-center justify-between pointer-events-none">
+        <!-- 左上角：開啟/隱藏設定區按鈕 -->
+        <div class="flex items-center gap-3 pointer-events-auto">
+            <button id="toggleSettingsBtn" class="pixel-btn bg-[#ef7d57] text-[#141824] font-bold px-4 py-2.5 flex items-center gap-2 text-base tracking-wider">
+                <!-- 像素齒輪圖示 -->
+                <svg class="w-5 h-5" viewBox="0 0 16 16" fill="currentColor">
+                    <path d="M6 1h4v2h2v2h2v4h-2v2h-2v2H6v-2H4v-2H2V5h2V3h2V1zm1 4v1H6v1H5v2h1v1h1v1h2v-1h1V9h1V7h-1V6H9V5H7z"/>
+                </svg>
+                <span id="settingsBtnLabel">設定區 (開啟)</span>
+            </button>
+        </div>
+
+        <!-- 右上角：音效開關與快速提示 -->
+        <div class="flex items-center gap-3 pointer-events-auto">
+            <button id="soundToggleBtn" class="pixel-btn bg-[#2a314b] text-[#ffcd75] px-3 py-2 text-sm flex items-center gap-2" title="切換復古8-bit音效">
+                <span id="soundIcon">🔊</span>
+                <span id="soundLabel" class="hidden md:inline">音效: 開</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- 可隱藏的設定區面板 (左側彈出式抽屜，預設隱藏) -->
+    <aside id="settingsPanel" class="fixed top-20 left-4 z-40 w-80 max-w-[calc(100vw-2rem)] pixel-box-amber p-4 transition-all duration-200 transform -translate-x-[120%] opacity-0 pointer-events-none custom-scroll max-h-[calc(100vh-6rem)] overflow-y-auto">
+        <div class="flex items-center justify-between border-b-2 border-[#566c86] pb-2 mb-4">
+            <div class="flex items-center gap-2 text-[#ffcd75] font-bold text-lg">
+                <span>⚙️ 系統設定區</span>
+            </div>
+            <button id="closeSettingsBtn" class="pixel-btn bg-[#e43b44] text-white px-2 py-0.5 text-xs">
+                ✕ 隱藏
+            </button>
+        </div>
+
+        <!-- 沙漏時長設定 (分、秒) -->
+        <div class="mb-5 bg-[#191e2e] border-2 border-[#41536b] p-3">
+            <h3 class="text-[#73eff7] text-sm font-bold mb-2.5 flex items-center gap-1.5">
+                <span>⏳ 電子沙漏時長設定</span>
+            </h3>
+            <div class="space-y-2.5 mb-3">
+                <div class="flex items-center justify-between bg-[#141824] p-2 border border-[#333c57]">
+                    <label class="text-xs text-[#94b0c2] font-bold">分鐘 (MIN)</label>
+                    <div class="flex items-center gap-1.5">
+                        <button type="button" data-step-min="-1" class="pixel-btn bg-[#2a314b] w-8 h-8 flex items-center justify-center text-sm font-bold">-1</button>
+                        <input id="inputMinutes" type="number" min="0" max="99" value="1" class="pixel-input w-20 h-8 font-pixel-num text-sm px-1">
+                        <button type="button" data-step-min="1" class="pixel-btn bg-[#2a314b] w-8 h-8 flex items-center justify-center text-sm font-bold">+1</button>
+                    </div>
+                </div>
+                <div class="flex items-center justify-between bg-[#141824] p-2 border border-[#333c57]">
+                    <label class="text-xs text-[#94b0c2] font-bold">秒數 (SEC)</label>
+                    <div class="flex items-center gap-1.5">
+                        <button type="button" data-step-sec="-10" class="pixel-btn bg-[#2a314b] w-8 h-8 flex items-center justify-center text-xs font-bold">-10</button>
+                        <input id="inputSeconds" type="number" min="0" max="59" value="00" class="pixel-input w-20 h-8 font-pixel-num text-sm px-1">
+                        <button type="button" data-step-sec="10" class="pixel-btn bg-[#2a314b] w-8 h-8 flex items-center justify-center text-xs font-bold">+10</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 快速預設時間按鈕 -->
+            <div class="mb-3">
+                <span class="block text-xs text-[#94b0c2] mb-1.5">快速時長預設：</span>
+                <div class="grid grid-cols-4 gap-1.5">
+                    <button type="button" data-preset="60" class="pixel-btn bg-[#29366f] text-xs py-1 text-[#f4f4f4]">1分</button>
+                    <button type="button" data-preset="180" class="pixel-btn bg-[#29366f] text-xs py-1 text-[#f4f4f4]">3分</button>
+                    <button type="button" data-preset="300" class="pixel-btn bg-[#29366f] text-xs py-1 text-[#f4f4f4]">5分</button>
+                    <button type="button" data-preset="600" class="pixel-btn bg-[#29366f] text-xs py-1 text-[#f4f4f4]">10分</button>
+                </div>
+            </div>
+
+            <!-- 沙子顏色選擇 -->
+            <div class="mb-3">
+                <span class="block text-xs text-[#94b0c2] mb-1.5">像素沙粒顏色：</span>
+                <div class="flex items-center gap-2">
+                    <button type="button" data-sand="gold" class="sand-theme-btn w-7 h-7 border-2 border-white bg-[#ffcd75]" title="黃金沙"></button>
+                    <button type="button" data-sand="cyan" class="sand-theme-btn w-7 h-7 border-2 border-transparent bg-[#41a6f6]" title="能量藍"></button>
+                    <button type="button" data-sand="green" class="sand-theme-btn w-7 h-7 border-2 border-transparent bg-[#38b764]" title="翡翠綠"></button>
+                    <button type="button" data-sand="pink" class="sand-theme-btn w-7 h-7 border-2 border-transparent bg-[#f6757a]" title="珊瑚紅"></button>
+                </div>
+            </div>
+
+            <button id="applyTimerBtn" class="pixel-btn w-full bg-[#38b764] text-[#141824] font-bold py-1.5 text-sm tracking-wider">
+                ✓ 套用沙漏時長
+            </button>
+        </div>
+
+        <!-- 座位表行列數設定 -->
+        <div class="bg-[#191e2e] border-2 border-[#41536b] p-3">
+            <h3 class="text-[#ffcd75] text-sm font-bold mb-2.5 flex items-center gap-1.5">
+                <span>🪑 座位表行列設定</span>
+            </h3>
+            <div class="space-y-2.5 mb-3">
+                <div class="flex items-center justify-between bg-[#141824] p-2 border border-[#333c57]">
+                    <label class="text-xs text-[#94b0c2] font-bold">直行數 (COLS)</label>
+                    <div class="flex items-center gap-1.5">
+                        <button type="button" data-step-col="-1" class="pixel-btn bg-[#2a314b] w-8 h-8 flex items-center justify-center text-sm font-bold">-</button>
+                        <input id="inputCols" type="number" min="1" max="10" value="6" class="pixel-input w-20 h-8 font-pixel-num text-sm px-1">
+                        <button type="button" data-step-col="1" class="pixel-btn bg-[#2a314b] w-8 h-8 flex items-center justify-center text-sm font-bold">+</button>
+                    </div>
+                </div>
+                <div class="flex items-center justify-between bg-[#141824] p-2 border border-[#333c57]">
+                    <label class="text-xs text-[#94b0c2] font-bold">橫列數 (ROWS)</label>
+                    <div class="flex items-center gap-1.5">
+                        <button type="button" data-step-row="-1" class="pixel-btn bg-[#2a314b] w-8 h-8 flex items-center justify-center text-sm font-bold">-</button>
+                        <input id="inputRows" type="number" min="1" max="10" value="5" class="pixel-input w-20 h-8 font-pixel-num text-sm px-1">
+                        <button type="button" data-step-row="1" class="pixel-btn bg-[#2a314b] w-8 h-8 flex items-center justify-center text-sm font-bold">+</button>
+                    </div>
+                </div>
+            </div>
+
+            <button id="applyGridBtn" class="pixel-btn w-full bg-[#41a6f6] text-[#141824] font-bold py-1.5 text-sm tracking-wider">
+                ✓ 更新座位表行列
+            </button>
+        </div>
+    </aside>
+
+    <!-- 畫面正中間：復古像素電子沙漏 -->
+    <main class="relative z-10 flex flex-col items-center justify-center px-4">
+        <div id="hourglassCard" class="pixel-box px-5 sm:px-7 py-4 sm:py-6 flex flex-col items-center relative">
+            <!-- 頂部狀態標籤 -->
+            <div class="w-full flex items-center justify-between mb-2 border-b-2 border-[#41536b] pb-1.5">
+                <span id="timerStatusBadge" class="text-xs px-2 py-0.5 bg-[#29366f] text-[#73eff7] tracking-wider">READY 待機中</span>
+                <span id="percentDisplay" class="font-pixel-num text-xs text-[#ffcd75]">100%</span>
+            </div>
+
+            <!-- 像素電子沙漏 Canvas (正中央視覺核心) -->
+            <div class="relative my-1 flex items-center justify-center bg-[#141824] border-4 border-[#41536b] p-2.5 sm:p-3 shadow-inner">
+                <canvas id="hourglassCanvas" width="84" height="116" class="pixel-canvas w-[168px] h-[232px] sm:w-[224px] sm:h-[310px] md:w-[252px] md:h-[348px]"></canvas>
+                
+                <!-- 時間到提示覆蓋層 -->
+                <div id="timeUpBanner" class="hidden absolute inset-x-2 top-1/2 -translate-y-1/2 bg-[#e43b44] border-4 border-white py-2 px-3 text-center shadow-lg">
+                    <p class="font-pixel-num text-sm sm:text-base text-white tracking-widest animate-bounce">TIME'S UP!</p>
+                    <p class="text-xs text-[#ffcd75] mt-1">響鈴三聲後自動停止</p>
+                </div>
+            </div>
+
+            <!-- 數位倒數計時器顯示 -->
+            <div class="mt-2.5 mb-3.5 bg-[#0f121c] border-3 border-[#566c86] px-6 py-2 text-center w-full shadow-inner">
+                <div id="digitalTimeDisplay" class="font-pixel-num text-2xl sm:text-3xl md:text-4xl tracking-widest text-[#ffcd75]">
+                    01:00
+                </div>
+            </div>
+
+            <!-- 沙漏控制按鈕列 -->
+            <div class="flex items-center gap-3 w-full justify-center">
+                <button id="startPauseBtn" class="pixel-btn bg-[#38b764] text-[#141824] font-bold px-5 py-2 text-sm sm:text-base flex-1 tracking-wider">
+                    ▶ 開始
+                </button>
+                <button id="resetTimerBtn" class="pixel-btn bg-[#ef7d57] text-[#141824] font-bold px-4 py-2 text-sm sm:text-base tracking-wider">
+                    ↺ 重置
+                </button>
+            </div>
+        </div>
+    </main>
+
+    <!-- 右下角：互動式像素座位表 (全響應式完整顯示) -->
+    <section id="seatingWidget" class="fixed bottom-3 right-3 sm:bottom-4 sm:right-4 z-30 pixel-box p-2.5 sm:p-3.5 transition-all duration-200 max-w-[calc(100vw-1.5rem)] flex flex-col">
+        <!-- 座位表標題與警示統計 -->
+        <div class="flex items-center justify-between gap-2 sm:gap-4 border-b-2 border-[#41536b] pb-1.5 mb-2">
+            <div class="flex items-center gap-1.5 sm:gap-2">
+                <span class="text-[#ffcd75] font-bold text-xs sm:text-base">🏫 班級座位表</span>
+                <span id="gridDimLabel" class="text-[10px] sm:text-xs bg-[#141824] text-[#73eff7] px-1.5 py-0.5 border border-[#41536b] font-pixel-num">6x5</span>
+            </div>
+
+            <div class="flex items-center gap-1.5 sm:gap-2">
+                <!-- 目前三角警示數量 -->
+                <div class="flex items-center gap-1 bg-[#291720] border border-[#e43b44] px-1.5 py-0.5 text-xs">
+                    <span class="text-[#ffcd75]">⚠️</span>
+                    <span id="warningCount" class="font-pixel-num text-[#ff6b6b] text-[10px] sm:text-xs">0</span>
+                </div>
+                <button id="clearWarningsBtn" class="pixel-btn bg-[#2a314b] text-[#f4f4f4] text-[11px] sm:text-xs px-2 py-0.5 hover:bg-[#e43b44]" title="清除所有座位的三角警示">
+                    全部復原
+                </button>
+                <button id="minimizeSeatingBtn" class="pixel-btn bg-[#2a314b] text-[#94b0c2] text-xs px-2 py-0.5" title="收合/展開座位表">
+                    ─
+                </button>
+            </div>
+        </div>
+
+        <!-- 座位表內容區 (無捲軸、自動縮放完整呈現) -->
+        <div id="seatingBody" class="flex flex-col items-center">
+            <!-- 講台區指示 -->
+            <div class="w-3/4 max-w-[240px] mx-auto mb-2 bg-[#3b2d4a] border-2 border-[#94b0c2] py-0.5 text-center text-[11px] sm:text-xs text-[#ffcd75] tracking-widest shadow-sm">
+                ▲ 講台 (黑板方向) ▲
+            </div>
+
+            <!-- 座位格線容器 -->
+            <div id="seatingGrid" class="grid gap-1 sm:gap-1.5 p-1 place-items-center">
+                <!-- 由 JavaScript 動態響應式生成座位格子 -->
+            </div>
+
+            <!-- 操作說明小字 -->
+            <div class="w-full mt-1.5 pt-1 border-t border-[#333c57] flex items-center justify-center text-[10px] sm:text-[11px] text-[#94b0c2]">
+                <span>💡 點擊座位切換「⚠️ 三角警示」，再點一次復原</span>
+            </div>
+        </div>
+    </section>
+
+    <script>
+        /**************************************************************
+         * 1. 狀態管理與全域變數
+         **************************************************************/
+        const state = {
+            // 計時器狀態
+            totalSeconds: 60,        // 預設 1 分 0 秒
+            remainingMs: 60 * 1000,  // 剩餘毫秒數（讓沙漏動畫更平滑）
+            isRunning: false,
+            isAlarming: false,
+            lastTickTime: null,
+            sandTheme: 'gold',       // gold | cyan | green | pink
+
+            // 座位表狀態 (預設 6*5 座位)
+            cols: 6,
+            rows: 5,
+            warnings: new Set(),     // 儲存被標記三角警示的座位 key: "r-c"
+            seatingMinimized: false,
+
+            // 介面與音效狀態
+            settingsOpen: false,     // 預設隱藏，有需要再點開
+            soundEnabled: true
+        };
+
+        // 像素沙粒配色主題表
+        const SAND_THEMES = {
+            gold:  { main: '#ffcd75', light: '#fff6d3', shadow: '#ef7d57', deep: '#a74b36' },
+            cyan:  { main: '#41a6f6', light: '#73eff7', shadow: '#257179', deep: '#1b3e5c' },
+            green: { main: '#38b764', light: '#a7f070', shadow: '#257179', deep: '#194d33' },
+            pink:  { main: '#f6757a', light: '#ffd1d5', shadow: '#b13e53', deep: '#5e1c2b' }
+        };
+
+        /**************************************************************
+         * 2. 復古 8-Bit 音效合成器 (Web Audio API，不依賴外部音檔)
+         **************************************************************/
+        let audioCtx = null;
+
+        function ensureAudioCtx() {
+            if (!audioCtx) {
+                const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+                if (AudioContextClass) {
+                    audioCtx = new AudioContextClass();
+                }
+            }
+            if (audioCtx && audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
+
+        function play8BitTone(freq, durationMs, type = 'square', volume = 0.08) {
+            if (!state.soundEnabled) return;
+            try {
+                ensureAudioCtx();
+                if (!audioCtx) return;
+
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = type;
+                osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+
+                gain.gain.setValueAtTime(volume, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + durationMs / 1000);
+
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+
+                osc.start();
+                osc.stop(audioCtx.currentTime + durationMs / 1000);
+            } catch (err) {
+                // 忽略瀏覽器未互動前的音訊限制錯誤
+            }
+        }
+
+        function sfxClick() {
+            play8BitTone(660, 55, 'square', 0.06);
+        }
+
+        function sfxWarningOn() {
+            play8BitTone(320, 90, 'sawtooth', 0.09);
+            setTimeout(() => play8BitTone(220, 140, 'square', 0.09), 75);
+        }
+
+        function sfxWarningOff() {
+            play8BitTone(523.25, 65, 'triangle', 0.07);
+            setTimeout(() => play8BitTone(659.25, 90, 'triangle', 0.07), 60);
+        }
+
+        function sfxAlarmBeep() {
+            play8BitTone(880, 110, 'square', 0.1);
+            setTimeout(() => play8BitTone(987.77, 110, 'square', 0.1), 130);
+            setTimeout(() => play8BitTone(1046.5, 180, 'square', 0.1), 260);
+        }
+
+        /**************************************************************
+         * 3. 像素電子沙漏繪製引擎 (Canvas 84x116 原生像素格)
+         **************************************************************/
+        const canvas = document.getElementById('hourglassCanvas');
+        const ctx = canvas.getContext('2d');
+        const CW = canvas.width;   // 84
+        const CH = canvas.height;  // 116
+
+        // 計算沙漏內部每一列 (y) 的玻璃左右邊界 (xMin, xMax)
+        function getBulbBounds(y) {
+            const centerX = 42;
+            const neckY = 58;
+            // 上半部沙漏: y 從 14 到 57
+            if (y >= 14 && y < neckY) {
+                const dist = neckY - y; // 1..44
+                let halfW;
+                if (dist > 30) {
+                    halfW = 24; // 上方筆直段
+                } else {
+                    halfW = Math.max(1, Math.floor((dist / 30) * 24));
+                }
+                return { left: centerX - halfW, right: centerX + halfW };
+            }
+            // 下半部沙漏: y 從 58 到 101
+            if (y >= neckY && y <= 101) {
+                const dist = y - neckY; // 0..43
+                let halfW;
+                if (dist > 30) {
+                    halfW = 24; // 下方筆直段
+                } else {
+                    halfW = Math.max(1, Math.floor((dist / 30) * 24));
+                }
+                return { left: centerX - halfW, right: centerX + halfW };
+            }
+            return null;
+        }
+
+        // 預先計算上下腔室總像素容量，讓沙量比例精準對應剩餘時間
+        const topBulbRows = [];
+        const bottomBulbRows = [];
+        for (let y = 16; y <= 56; y++) {
+            const b = getBulbBounds(y);
+            if (b) topBulbRows.push({ y, left: b.left + 2, right: b.right - 2 });
+        }
+        for (let y = 59; y <= 100; y++) {
+            const b = getBulbBounds(y);
+            if (b) bottomBulbRows.push({ y, left: b.left + 2, right: b.right - 2 });
+        }
+
+        // 繪製單一像素格輔助函式
+        function pRect(x, y, w, h, color) {
+            ctx.fillStyle = color;
+            ctx.fillRect(Math.floor(x), Math.floor(y), Math.floor(w), Math.floor(h));
+        }
+
+        let animFrameCount = 0;
+
+        function renderHourglass() {
+            animFrameCount++;
+            ctx.clearRect(0, 0, CW, CH);
+
+            const theme = SAND_THEMES[state.sandTheme] || SAND_THEMES.gold;
+            const progress = state.totalSeconds > 0
+                ? Math.max(0, Math.min(1, state.remainingMs / (state.totalSeconds * 1000)))
+                : 0;
+
+            // 1. 繪製上下復古木質與黃金底座外框
+            // 頂部外框
+            pRect(10, 6, 64, 4, '#d9a066');
+            pRect(10, 6, 64, 1, '#ffcd75');
+            pRect(8, 10, 68, 4, '#8f563b');
+            pRect(8, 13, 68, 1, '#4b2d1f');
+
+            // 底部外框
+            pRect(8, 102, 68, 4, '#8f563b');
+            pRect(8, 102, 68, 1, '#d9a066');
+            pRect(10, 106, 64, 4, '#d9a066');
+            pRect(10, 109, 64, 1, '#4b2d1f');
+
+            // 左右兩側立柱 (像素裝飾柱)
+            pRect(12, 14, 3, 88, '#5a3928');
+            pRect(13, 14, 1, 88, '#8f563b');
+            pRect(69, 14, 3, 88, '#5a3928');
+            pRect(70, 14, 1, 88, '#8f563b');
+
+            // 立柱金色節點
+            pRect(11, 14, 5, 3, '#ffcd75');
+            pRect(68, 14, 5, 3, '#ffcd75');
+            pRect(11, 56, 5, 4, '#ffcd75');
+            pRect(68, 56, 5, 4, '#ffcd75');
+            pRect(11, 99, 5, 3, '#ffcd75');
+            pRect(68, 99, 5, 3, '#ffcd75');
+
+            // 2. 繪製玻璃腔室背景
+            for (let y = 14; y <= 101; y++) {
+                const b = getBulbBounds(y);
+                if (!b) continue;
+                pRect(b.left, y, b.right - b.left + 1, 1, '#1c2536');
+            }
+
+            // 3. 繪製上半部剩餘沙量 (由下往上堆積，表面帶微凹漏斗感)
+            const totalTopRows = topBulbRows.length;
+            const activeTopRowCount = Math.ceil(progress * totalTopRows);
+            const startTopIdx = totalTopRows - activeTopRowCount;
+
+            for (let i = startTopIdx; i < totalTopRows; i++) {
+                const row = topBulbRows[i];
+                if (!row) continue;
+                const rowWidth = row.right - row.left + 1;
+                if (rowWidth <= 0) continue;
+
+                // 基本沙色
+                pRect(row.left, row.y, rowWidth, 1, theme.main);
+
+                // 表層亮光
+                if (i === startTopIdx) {
+                    pRect(row.left, row.y, rowWidth, 1, theme.light);
+                    // 若正在倒數，中央形成小凹口
+                    if (state.isRunning && rowWidth > 6) {
+                        pRect(41, row.y, 3, 1, '#1c2536');
+                    }
+                } else if (i > totalTopRows - 8) {
+                    // 接近瓶頸處加深陰影
+                    pRect(row.right - 2, row.y, 2, 1, theme.shadow);
+                }
+
+                // 加入像素顆粒感 (棋盤格紋理)
+                for (let x = row.left; x <= row.right; x++) {
+                    if ((x + row.y) % 5 === 0 && i !== startTopIdx) {
+                        pRect(x, row.y, 1, 1, theme.shadow);
+                    }
+                }
+            }
+
+            // 4. 繪製下半部累積沙量 (由底部往上堆積，頂端呈現自然小沙丘錐形)
+            const elapsedRatio = 1 - progress;
+            const totalBottomRows = bottomBulbRows.length;
+            const activeBottomRowCount = Math.floor(elapsedRatio * totalBottomRows);
+            const startBottomIdx = totalBottomRows - activeBottomRowCount;
+
+            for (let i = startBottomIdx; i < totalBottomRows; i++) {
+                const row = bottomBulbRows[i];
+                if (!row) continue;
+
+                let leftX = row.left;
+                let rightX = row.right;
+
+                // 最上方幾層做出像素金字塔沙丘尖頂
+                const distFromTop = i - startBottomIdx;
+                if (distFromTop < 5 && elapsedRatio < 0.98) {
+                    const shrink = (5 - distFromTop) * 3;
+                    leftX = Math.min(41, leftX + shrink);
+                    rightX = Math.max(43, rightX - shrink);
+                }
+
+                const w = rightX - leftX + 1;
+                if (w > 0) {
+                    pRect(leftX, row.y, w, 1, theme.main);
+                    if (distFromTop === 0) {
+                        pRect(leftX, row.y, w, 1, theme.light);
+                    }
+                    // 像素顆粒紋理
+                    for (let x = leftX; x <= rightX; x++) {
+                        if ((x * 3 + row.y) % 6 === 0 && distFromTop > 0) {
+                            pRect(x, row.y, 1, 1, theme.shadow);
+                        }
+                    }
+                }
+            }
+
+            // 5. 當沙漏運作中且還有剩餘時間，繪製中央落沙像素粒子流
+            if (state.isRunning && progress > 0) {
+                const bottomSurfaceY = activeBottomRowCount > 0
+                    ? bottomBulbRows[startBottomIdx]?.y || 100
+                    : 100;
+
+                for (let y = 57; y < bottomSurfaceY; y++) {
+                    // 交錯閃爍下落的沙粒
+                    if ((y + Math.floor(animFrameCount / 2)) % 2 === 0) {
+                        pRect(42, y, 1, 1, theme.light);
+                    } else if ((y + Math.floor(animFrameCount / 2)) % 3 === 0) {
+                        pRect(41, y, 1, 1, theme.main);
+                    }
+                }
+
+                // 底部撞擊彈跳小沙粒
+                if (animFrameCount % 4 < 2 && bottomSurfaceY > 62) {
+                    pRect(39, bottomSurfaceY - 1, 1, 1, theme.light);
+                    pRect(45, bottomSurfaceY - 2, 1, 1, theme.main);
+                } else if (bottomSurfaceY > 62) {
+                    pRect(44, bottomSurfaceY - 1, 1, 1, theme.light);
+                    pRect(40, bottomSurfaceY - 2, 1, 1, theme.main);
+                }
+            }
+
+            // 6. 繪製玻璃邊框與像素高光反光
+            for (let y = 14; y <= 101; y++) {
+                const b = getBulbBounds(y);
+                if (!b) continue;
+                // 左右玻璃外框像素
+                pRect(b.left, y, 1, 1, '#94b0c2');
+                pRect(b.right, y, 1, 1, '#94b0c2');
+
+                // 左側內部像素玻璃反光
+                if ((y >= 18 && y <= 38) || (y >= 68 && y <= 92)) {
+                    pRect(b.left + 3, y, 1, 1, '#ffffff');
+                }
+            }
+        }
+
+        /**************************************************************
+         * 4. 計時器核心邏輯與時間格式化
+         **************************************************************/
+        const digitalTimeDisplay = document.getElementById('digitalTimeDisplay');
+        const percentDisplay = document.getElementById('percentDisplay');
+        const timerStatusBadge = document.getElementById('timerStatusBadge');
+        const startPauseBtn = document.getElementById('startPauseBtn');
+        const hourglassCard = document.getElementById('hourglassCard');
+        const timeUpBanner = document.getElementById('timeUpBanner');
+
+        function formatTime(ms) {
+            const totalSec = Math.ceil(ms / 1000);
+            const mins = Math.floor(totalSec / 60);
+            const secs = totalSec % 60;
+            return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+        }
+
+        function updateTimerUI() {
+            digitalTimeDisplay.textContent = formatTime(state.remainingMs);
+            const pct = state.totalSeconds > 0
+                ? Math.round((state.remainingMs / (state.totalSeconds * 1000)) * 100)
+                : 0;
+            percentDisplay.textContent = `${Math.max(0, Math.min(100, pct))}%`;
+
+            if (state.isAlarming) {
+                timerStatusBadge.textContent = 'ALARM 時間到!';
+                timerStatusBadge.className = 'text-xs px-2 py-0.5 bg-[#e43b44] text-white tracking-wider';
+                hourglassCard.classList.add('alarm-flash');
+                timeUpBanner.classList.remove('hidden');
+                startPauseBtn.textContent = '🔕 停止響鈴';
+                startPauseBtn.className = 'pixel-btn bg-[#e43b44] text-white font-bold px-5 py-2.5 text-sm sm:text-base flex-1 tracking-wider';
+            } else if (state.isRunning) {
+                timerStatusBadge.textContent = 'RUNNING 倒數中';
+                timerStatusBadge.className = 'text-xs px-2 py-0.5 bg-[#38b764] text-[#141824] font-bold tracking-wider';
+                hourglassCard.classList.remove('alarm-flash');
+                timeUpBanner.classList.add('hidden');
+                startPauseBtn.textContent = '⏸ 暫停';
+                startPauseBtn.className = 'pixel-btn bg-[#ffcd75] text-[#141824] font-bold px-5 py-2.5 text-sm sm:text-base flex-1 tracking-wider';
+            } else {
+                timerStatusBadge.textContent = 'READY 待機中';
+                timerStatusBadge.className = 'text-xs px-2 py-0.5 bg-[#29366f] text-[#73eff7] tracking-wider';
+                hourglassCard.classList.remove('alarm-flash');
+                timeUpBanner.classList.add('hidden');
+                startPauseBtn.textContent = '▶ 開始';
+                startPauseBtn.className = 'pixel-btn bg-[#38b764] text-[#141824] font-bold px-5 py-2.5 text-sm sm:text-base flex-1 tracking-wider';
+            }
+        }
+
+        let alarmInterval = null;
+        let alarmAutoStopTimeout = null;
+
+        function stopAlarm() {
+            state.isAlarming = false;
+            if (alarmInterval) {
+                clearInterval(alarmInterval);
+                alarmInterval = null;
+            }
+            if (alarmAutoStopTimeout) {
+                clearTimeout(alarmAutoStopTimeout);
+                alarmAutoStopTimeout = null;
+            }
+            updateTimerUI();
+        }
+
+        function triggerTimeUp() {
+            state.isRunning = false;
+            state.remainingMs = 0;
+            state.isAlarming = true;
+            updateTimerUI();
+
+            if (alarmInterval) clearInterval(alarmInterval);
+            if (alarmAutoStopTimeout) clearTimeout(alarmAutoStopTimeout);
+
+            // 響鈴三聲後自動停止
+            let beepCount = 1;
+            sfxAlarmBeep(); // 第 1 聲
+
+            alarmInterval = setInterval(() => {
+                if (!state.isAlarming) {
+                    clearInterval(alarmInterval);
+                    alarmInterval = null;
+                    return;
+                }
+                beepCount++;
+                if (beepCount <= 3) {
+                    sfxAlarmBeep(); // 第 2、3 聲
+                }
+                if (beepCount >= 3) {
+                    clearInterval(alarmInterval);
+                    alarmInterval = null;
+                    // 第 3 聲播放完畢後自動停止響鈴狀態
+                    alarmAutoStopTimeout = setTimeout(() => {
+                        stopAlarm();
+                    }, 600);
+                }
+            }, 1000);
+        }
+
+        function mainLoop(timestamp) {
+            if (state.isRunning) {
+                if (!state.lastTickTime) state.lastTickTime = timestamp;
+                const delta = timestamp - state.lastTickTime;
+                state.lastTickTime = timestamp;
+
+                state.remainingMs = Math.max(0, state.remainingMs - delta);
+                updateTimerUI();
+
+                if (state.remainingMs <= 0) {
+                    triggerTimeUp();
+                }
+            } else {
+                state.lastTickTime = null;
+            }
+
+            renderHourglass();
+            requestAnimationFrame(mainLoop);
+        }
+
+        /**************************************************************
+         * 5. 右下角座位表生成與「三角警示」點擊切換邏輯
+         **************************************************************/
+        const seatingGrid = document.getElementById('seatingGrid');
+        const gridDimLabel = document.getElementById('gridDimLabel');
+        const warningCountEl = document.getElementById('warningCount');
+
+        // 復古像素風格「三角警示」SVG 圖示
+        function getPixelWarningTriangleSVG() {
+            return `
+                <svg class="w-4/5 h-4/5 warning-icon-anim mx-auto pointer-events-none" viewBox="0 0 16 16" shape-rendering="crispEdges">
+                    <!-- 黑色外框 -->
+                    <path d="M7 1h2v2h1v2h1v2h1v2h1v2h1v2h1v2H1v-2h1v-2h1V9h1V7h1V5h1V3h1V1z" fill="#141824"/>
+                    <!-- 黃色三角主體 -->
+                    <path d="M7 2h2v2h1v2h1v2h1v2h1v2h1v2H2v-2h1v-2h1V8h1V6h1V4h1V2z" fill="#ffcd75"/>
+                    <!-- 紅色邊緣強調 -->
+                    <path d="M7 3h2v1H7V3zm-1 2h1v2H6V5zm3 0h1v2H9V5zm-4 2h1v2H5V7zm5 0h1v2h-1V7zm-6 2h1v2H4V9zm7 0h1v2h-1V9zm-8 2h1v2H3v-2zm9 0h1v2h-1v-2z" fill="#e43b44"/>
+                    <!-- 中央驚嘆號 (!) -->
+                    <rect x="7" y="5" width="2" height="5" fill="#141824"/>
+                    <rect x="7" y="11" width="2" height="2" fill="#141824"/>
+                </svg>
+            `;
+        }
+
+        // 統一替代座位號碼的復古像素符號 (像素課桌椅圖示)
+        function getPixelSeatSymbolSVG() {
+            return `
+                <svg class="w-3/5 h-3/5 mx-auto pointer-events-none opacity-85" viewBox="0 0 16 16" shape-rendering="crispEdges">
+                    <!-- 桌面高光與主體 -->
+                    <rect x="2" y="4" width="12" height="2" fill="#73eff7"/>
+                    <rect x="3" y="6" width="10" height="2" fill="#41a6f6"/>
+                    <!-- 桌腳 -->
+                    <rect x="3" y="8" width="2" height="5" fill="#566c86"/>
+                    <rect x="11" y="8" width="2" height="5" fill="#566c86"/>
+                    <!-- 像素椅墊與椅腳 -->
+                    <rect x="5" y="10" width="6" height="2" fill="#ffcd75"/>
+                    <rect x="6" y="12" width="1" height="2" fill="#94b0c2"/>
+                    <rect x="9" y="12" width="1" height="2" fill="#94b0c2"/>
+                </svg>
+            `;
+        }
+
+        function updateWarningCounter() {
+            warningCountEl.textContent = state.warnings.size;
+        }
+
+        // 依據螢幕尺寸與行列數動態計算每個座位的最佳像素尺寸，確保座位表 100% 完整顯示不出現捲軸
+        function computeSeatCellSize() {
+            const vw = window.innerWidth;
+            const vh = window.innerHeight;
+
+            // 在不同螢幕尺寸下分配給右下角座位表的最大可用寬高
+            const maxGridWidth = vw < 640
+                ? Math.min(vw - 44, 340)
+                : Math.min(vw * 0.42, 460);
+            const maxGridHeight = vh < 680
+                ? Math.min(vh * 0.34, 240)
+                : Math.min(vh * 0.44, 360);
+
+            const gap = vw < 640 ? 4 : 6;
+            const cellW = Math.floor((maxGridWidth - (state.cols - 1) * gap) / state.cols);
+            const cellH = Math.floor((maxGridHeight - (state.rows - 1) * gap) / state.rows);
+
+            // 保持正方形格子並限制最小/最大尺寸
+            return Math.max(22, Math.min(48, cellW, cellH));
+        }
+
+        function renderSeatingChart() {
+            seatingGrid.innerHTML = '';
+            const cellSize = computeSeatCellSize();
+            seatingGrid.style.gridTemplateColumns = `repeat(${state.cols}, ${cellSize}px)`;
+            gridDimLabel.textContent = `${state.cols}x${state.rows}`;
+
+            // 清理超出目前行列範圍的舊警示紀錄
+            for (const key of Array.from(state.warnings)) {
+                const [r, c] = key.split('-').map(Number);
+                if (r >= state.rows || c >= state.cols) {
+                    state.warnings.delete(key);
+                }
+            }
+
+            for (let r = 0; r < state.rows; r++) {
+                for (let c = 0; c < state.cols; c++) {
+                    const key = `${r}-${c}`;
+                    const isWarned = state.warnings.has(key);
+
+                    const cell = document.createElement('button');
+                    cell.type = 'button';
+                    cell.dataset.key = key;
+                    cell.style.width = `${cellSize}px`;
+                    cell.style.height = `${cellSize}px`;
+                    cell.className = `seat-cell flex items-center justify-center p-0.5 select-none ${isWarned ? 'warning-active' : ''}`;
+                    cell.title = `點擊切換三角警示`;
+
+                    updateSeatCellContent(cell, isWarned);
+
+                    cell.addEventListener('click', () => {
+                        if (state.warnings.has(key)) {
+                            state.warnings.delete(key);
+                            cell.classList.remove('warning-active');
+                            updateSeatCellContent(cell, false);
+                            sfxWarningOff();
+                        } else {
+                            state.warnings.add(key);
+                            cell.classList.add('warning-active');
+                            updateSeatCellContent(cell, true);
+                            sfxWarningOn();
+                        }
+                        updateWarningCounter();
+                    });
+
+                    seatingGrid.appendChild(cell);
+                }
+            }
+
+            updateWarningCounter();
+        }
+
+        function updateSeatCellContent(cell, isWarned) {
+            if (isWarned) {
+                cell.innerHTML = getPixelWarningTriangleSVG();
+            } else {
+                cell.innerHTML = getPixelSeatSymbolSVG();
+            }
+        }
+
+        // 視窗大小改變時，自動重新調整座位格尺寸以確保完整顯示
+        window.addEventListener('resize', () => {
+            renderSeatingChart();
+        });
+
+        /**************************************************************
+         * 6. 事件綁定與設定區互動控制
+         **************************************************************/
+        const settingsPanel = document.getElementById('settingsPanel');
+        const toggleSettingsBtn = document.getElementById('toggleSettingsBtn');
+        const closeSettingsBtn = document.getElementById('closeSettingsBtn');
+        const settingsBtnLabel = document.getElementById('settingsBtnLabel');
+
+        function setSettingsVisibility(visible) {
+            state.settingsOpen = visible;
+            if (visible) {
+                settingsPanel.classList.remove('-translate-x-[120%]', 'opacity-0', 'pointer-events-none');
+                settingsPanel.classList.add('translate-x-0', 'opacity-100');
+                settingsBtnLabel.textContent = '設定區 (隱藏)';
+            } else {
+                settingsPanel.classList.add('-translate-x-[120%]', 'opacity-0', 'pointer-events-none');
+                settingsPanel.classList.remove('translate-x-0', 'opacity-100');
+                settingsBtnLabel.textContent = '設定區 (開啟)';
+            }
+        }
+
+        toggleSettingsBtn.addEventListener('click', () => {
+            sfxClick();
+            setSettingsVisibility(!state.settingsOpen);
+        });
+
+        closeSettingsBtn.addEventListener('click', () => {
+            sfxClick();
+            setSettingsVisibility(false);
+        });
+
+        // 沙漏開始/暫停與重置
+        startPauseBtn.addEventListener('click', () => {
+            sfxClick();
+            if (state.isAlarming) {
+                stopAlarm();
+                state.remainingMs = state.totalSeconds * 1000;
+                updateTimerUI();
+                return;
+            }
+
+            if (state.remainingMs <= 0) {
+                state.remainingMs = state.totalSeconds * 1000;
+            }
+            state.isRunning = !state.isRunning;
+            updateTimerUI();
+        });
+
+        document.getElementById('resetTimerBtn').addEventListener('click', () => {
+            sfxClick();
+            stopAlarm();
+            state.isRunning = false;
+            state.remainingMs = state.totalSeconds * 1000;
+            updateTimerUI();
+        });
+
+        // 設定區：時長分、秒調整與套用
+        const inputMinutes = document.getElementById('inputMinutes');
+        const inputSeconds = document.getElementById('inputSeconds');
+
+        function applyCustomTimer(mins, secs) {
+            const safeMin = Math.max(0, Math.min(99, parseInt(mins, 10) || 0));
+            const safeSec = Math.max(0, Math.min(59, parseInt(secs, 10) || 0));
+            // 避免 0 分 0 秒
+            const finalTotal = (safeMin * 60 + safeSec) > 0 ? (safeMin * 60 + safeSec) : 10;
+
+            inputMinutes.value = Math.floor(finalTotal / 60);
+            inputSeconds.value = String(finalTotal % 60).padStart(2, '0');
+
+            stopAlarm();
+            state.isRunning = false;
+            state.totalSeconds = finalTotal;
+            state.remainingMs = finalTotal * 1000;
+            updateTimerUI();
+        }
+
+        document.getElementById('applyTimerBtn').addEventListener('click', () => {
+            sfxClick();
+            applyCustomTimer(inputMinutes.value, inputSeconds.value);
+        });
+
+        // 分鐘與秒數微調按鈕 (+ / -)
+        document.querySelectorAll('[data-step-min]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                sfxClick();
+                const delta = parseInt(btn.dataset.stepMin, 10);
+                const nextVal = Math.max(0, Math.min(99, (parseInt(inputMinutes.value, 10) || 0) + delta));
+                inputMinutes.value = nextVal;
+                applyCustomTimer(inputMinutes.value, inputSeconds.value);
+            });
+        });
+
+        document.querySelectorAll('[data-step-sec]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                sfxClick();
+                const delta = parseInt(btn.dataset.stepSec, 10);
+                let nextSec = (parseInt(inputSeconds.value, 10) || 0) + delta;
+                let nextMin = parseInt(inputMinutes.value, 10) || 0;
+                if (nextSec >= 60) {
+                    nextMin = Math.min(99, nextMin + 1);
+                    nextSec -= 60;
+                } else if (nextSec < 0) {
+                    if (nextMin > 0) {
+                        nextMin -= 1;
+                        nextSec += 60;
+                    } else {
+                        nextSec = 0;
+                    }
+                }
+                inputMinutes.value = nextMin;
+                inputSeconds.value = nextSec;
+                applyCustomTimer(inputMinutes.value, inputSeconds.value);
+            });
+        });
+
+        // 快速預設時間按鈕 (1分, 3分, 5分, 10分)
+        document.querySelectorAll('[data-preset]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                sfxClick();
+                const totalSec = parseInt(btn.dataset.preset, 10);
+                applyCustomTimer(Math.floor(totalSec / 60), totalSec % 60);
+            });
+        });
+
+        // 像素沙粒顏色切換
+        document.querySelectorAll('.sand-theme-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                sfxClick();
+                state.sandTheme = btn.dataset.sand;
+                document.querySelectorAll('.sand-theme-btn').forEach(b => {
+                    b.classList.remove('border-white');
+                    b.classList.add('border-transparent');
+                });
+                btn.classList.remove('border-transparent');
+                btn.classList.add('border-white');
+            });
+        });
+
+        // 設定區：座位表行列數調整
+        const inputCols = document.getElementById('inputCols');
+        const inputRows = document.getElementById('inputRows');
+
+        function applyGridDimensions() {
+            const c = Math.max(1, Math.min(10, parseInt(inputCols.value, 10) || 6));
+            const r = Math.max(1, Math.min(10, parseInt(inputRows.value, 10) || 5));
+            inputCols.value = c;
+            inputRows.value = r;
+            state.cols = c;
+            state.rows = r;
+            renderSeatingChart();
+        }
+
+        document.getElementById('applyGridBtn').addEventListener('click', () => {
+            sfxClick();
+            applyGridDimensions();
+        });
+
+        document.querySelectorAll('[data-step-col]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                sfxClick();
+                const delta = parseInt(btn.dataset.stepCol, 10);
+                inputCols.value = Math.max(1, Math.min(10, (parseInt(inputCols.value, 10) || 6) + delta));
+                applyGridDimensions();
+            });
+        });
+
+        document.querySelectorAll('[data-step-row]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                sfxClick();
+                const delta = parseInt(btn.dataset.stepRow, 10);
+                inputRows.value = Math.max(1, Math.min(10, (parseInt(inputRows.value, 10) || 5) + delta));
+                applyGridDimensions();
+            });
+        });
+
+        // 清除所有三角警示按鈕
+        document.getElementById('clearWarningsBtn').addEventListener('click', () => {
+            if (state.warnings.size > 0) {
+                sfxWarningOff();
+                state.warnings.clear();
+                renderSeatingChart();
+            }
+        });
+
+        // 右下角座位表收合/展開切換
+        const seatingBody = document.getElementById('seatingBody');
+        const minimizeSeatingBtn = document.getElementById('minimizeSeatingBtn');
+        minimizeSeatingBtn.addEventListener('click', () => {
+            sfxClick();
+            state.seatingMinimized = !state.seatingMinimized;
+            if (state.seatingMinimized) {
+                seatingBody.classList.add('hidden');
+                minimizeSeatingBtn.textContent = '□';
+            } else {
+                seatingBody.classList.remove('hidden');
+                minimizeSeatingBtn.textContent = '─';
+            }
+        });
+
+        // 右上角音效開關
+        const soundToggleBtn = document.getElementById('soundToggleBtn');
+        const soundIcon = document.getElementById('soundIcon');
+        const soundLabel = document.getElementById('soundLabel');
+        soundToggleBtn.addEventListener('click', () => {
+            state.soundEnabled = !state.soundEnabled;
+            soundIcon.textContent = state.soundEnabled ? '🔊' : '🔇';
+            soundLabel.textContent = state.soundEnabled ? '音效: 開' : '音效: 關';
+            if (state.soundEnabled) sfxClick();
+        });
+
+        // 初始化應用程式
+        window.onload = function () {
+            setSettingsVisibility(false);
+            renderSeatingChart();
+            updateTimerUI();
+            requestAnimationFrame(mainLoop);
+        };
+    </script>
+</body>
+</html>
